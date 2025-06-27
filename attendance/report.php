@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ($kelas_stmt->rowCount() > 0) {
             $kelas_data = $kelas_stmt->fetch(PDO::FETCH_ASSOC);
             
-            // Get attendance details
+            // Get attendance details with GPS and photo
             $attendance_query = "SELECT a.*, u.nama, u.email 
                                FROM absensi a 
                                LEFT JOIN users u ON a.user_id = u.id 

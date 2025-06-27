@@ -1,114 +1,173 @@
-# Backend Sistem Absensi
+PluginError: Failed to resolve plugin for module "expo-camera" relative to "D:\CodeFiles\absensi_pbl". Do you have node modules installed?# Backend Absensi API
 
-Backend untuk sistem absensi menggunakan PHP Native dan MySQL.
+Sistem backend untuk aplikasi absensi dengan manajemen kelas aktif/inaktif. **Kompatibel dengan aplikasi absensi_pbl**.
 
-## Persyaratan Sistem
+## Database Schema
 
-- PHP 7.4 atau lebih tinggi
-- MySQL 5.7 atau lebih tinggi
-- Web Server (Apache/Nginx)
+### Tabel Users
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `nama` (VARCHAR(100), NOT NULL)
+- `email` (VARCHAR(100), NOT NULL, UNIQUE)
+- `password` (VARCHAR(255), NOT NULL)
+- `role` (ENUM('admin', 'user'), DEFAULT 'user')
+- `created_at` (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
 
-## Instalasi
+### Tabel Kelas
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `nama_kelas` (VARCHAR(100), NOT NULL)
+- `tanggal` (DATE, NOT NULL)
+- `created_by` (INT, FOREIGN KEY ke users.id)
+- `status` (ENUM('active', 'inactive'), DEFAULT 'active')
+- `created_at` (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
 
-1. Clone repository ini ke direktori web server Anda
-2. Import file `database.sql` ke MySQL untuk membuat database dan tabelnya
-3. Sesuaikan konfigurasi database di file `config/database.php`
-
-## Struktur Database
-
-Database terdiri dari 3 tabel utama:
-- `users`: Menyimpan data pengguna (admin dan user biasa)
-- `kelas`: Menyimpan data kelas untuk absensi
-- `absensi`: Menyimpan data absensi siswa
+### Tabel Absensi
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `kelas_id` (INT, FOREIGN KEY ke kelas.id)
+- `user_id` (INT, FOREIGN KEY ke users.id)
+- `status` (ENUM('hadir', 'izin', 'sakit'), NOT NULL)
+- `waktu` (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
 
 ## API Endpoints
 
-### Autentikasi
-- `POST /auth/login.php`: Login user
-- `POST /auth/register.php`: Registrasi user baru
+### Authentication
+- `POST /auth/login.php` - Login user
+- `POST /auth/register.php` - Register user baru
 
-### Manajemen Kelas
-- `POST /attendance/create.php`: Membuat kelas baru
-- `POST /attendance/take_attendance.php`: Mengambil absensi
-- `GET /attendance/report.php`: Melihat laporan absensi
+### Kelas Management (Kompatibel dengan absensi_pbl)
+- `GET /attendance/list_classes.php` - Daftar semua kelas (untuk kompatibilitas)
+- `GET /attendance/list_classes.php?user_id={id}` - Daftar kelas berdasarkan role user
+- `POST /attendance/take_attendance.php` - Ambil absensi (hanya untuk kelas aktif)
+
+### Kelas Management (Admin)
+- `GET /attendance/admin_classes.php` - Daftar semua kelas untuk admin (tanpa verifikasi)
+- `GET /attendance/admin_classes.php?admin_id={id}` - Daftar semua kelas dengan verifikasi admin
+- `POST /attendance/update_status.php` - Update status kelas (aktif/inaktif)
+- `POST /attendance/create.php` - Buat kelas baru
+
+### Reports
+- `GET /attendance/history.php` - Riwayat absensi
+- `GET /attendance/report.php` - Laporan absensi
+
+## Fitur Keamanan
+
+### Manajemen Status Kelas
+1. **User Biasa**: Hanya dapat melihat dan melakukan absensi pada kelas dengan status 'active'
+2. **Admin**: Dapat melihat semua kelas (aktif dan tidak aktif) dan mengubah status kelas
+
+### Validasi
+- Semua endpoint menggunakan prepared statements untuk mencegah SQL injection
+- Password di-hash menggunakan bcrypt
+- Validasi role untuk akses admin (opsional untuk kompatibilitas)
+- Validasi status kelas sebelum absensi
+
+## Kompatibilitas dengan absensi_pbl
+
+Backend ini telah disesuaikan agar kompatibel dengan aplikasi `absensi_pbl`:
+
+### Endpoint yang Kompatibel
+- `GET /attendance/list_classes.php` - Tanpa parameter, mengembalikan semua kelas
+- `POST /attendance/update_status.php` - Tanpa admin_id, untuk kompatibilitas
+- `GET /attendance/admin_classes.php` - Tanpa admin_id, untuk kompatibilitas
+
+### Pola Penggunaan
+Aplikasi `absensi_pbl` menggunakan endpoint yang sama dengan pola:
+```javascript
+const API_BASE_URL = 'https://belajar.novatix.site';
+
+// Mengambil daftar kelas
+fetch(`${API_BASE_URL}/attendance/list_classes.php`)
+
+// Update status kelas
+fetch(`${API_BASE_URL}/attendance/update_status.php`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ kelas_id: 1, status: 'inactive' })
+})
+```
+
+## Cara Penggunaan
+
+### Untuk User Biasa
+```javascript
+// Ambil daftar kelas (hanya yang aktif)
+fetch('/attendance/list_classes.php?user_id=123')
+  .then(response => response.json())
+  .then(data => console.log(data));
+
+// Ambil absensi (hanya untuk kelas aktif)
+fetch('/attendance/take_attendance.php', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    kelas_id: 1,
+    user_id: 123,
+    status: 'hadir'
+  })
+});
+```
+
+### Untuk Admin (Kompatibel dengan absensi_pbl)
+```javascript
+// Ambil semua kelas untuk manajemen
+fetch('/attendance/admin_classes.php')
+  .then(response => response.json())
+  .then(data => console.log(data));
+
+// Update status kelas (tanpa admin_id)
+fetch('/attendance/update_status.php', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    kelas_id: 1,
+    status: 'inactive'
+  })
+});
+
+// Update status kelas (dengan admin_id untuk keamanan tambahan)
+fetch('/attendance/update_status.php', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    kelas_id: 1,
+    status: 'inactive',
+    admin_id: 1
+  })
+});
+```
+
+## Response Format
+
+### Success Response
+```json
+{
+  "status": "success",
+  "message": "Pesan sukses",
+  "data": [...],
+  "user_role": "admin" // untuk list_classes.php dengan user_id
+}
+```
+
+### Error Response
+```json
+{
+  "status": "error",
+  "message": "Pesan error"
+}
+```
 
 ## Default Admin Account
 - Email: admin@admin.com
 - Password: admin123
+- Role: admin
 
-## Format Request & Response
+## Setup Database
+1. Import file `database.sql` ke MySQL/MariaDB
+2. Konfigurasi koneksi database di `config/database.php`
+3. Pastikan web server dapat mengakses direktori ini
 
-### Login
-Request:
-```json
-{
-    "email": "user@example.com",
-    "password": "password123"
-}
-```
-
-Response Success:
-```json
-{
-    "status": "success",
-    "message": "Login berhasil",
-    "data": {
-        "id": 1,
-        "nama": "User Name",
-        "email": "user@example.com",
-        "role": "user"
-    }
-}
-```
-
-### Create Attendance
-Request:
-```json
-{
-    "nama_kelas": "Matematika A",
-    "tanggal": "2024-03-20",
-    "created_by": 1
-}
-```
-
-Response Success:
-```json
-{
-    "status": "success",
-    "message": "Kelas berhasil dibuat",
-    "data": {
-        "kelas_id": 1,
-        "nama_kelas": "Matematika A",
-        "tanggal": "2024-03-20"
-    }
-}
-```
-
-### Take Attendance
-Request:
-```json
-{
-    "kelas_id": 1,
-    "user_id": 2,
-    "status": "hadir"
-}
-```
-
-Response Success:
-```json
-{
-    "status": "success",
-    "message": "Absensi berhasil dicatat"
-}
-```
-
-## Keamanan
-- Semua password di-hash menggunakan algoritma bcrypt
-- Menggunakan prepared statements untuk mencegah SQL injection
-- Validasi input untuk semua request
-- CORS enabled untuk integrasi dengan frontend
-
-## Catatan
-- Pastikan folder memiliki permission yang tepat untuk PHP
-- Aktifkan error reporting di development, matikan di production
-- Backup database secara berkala 
+## Keamanan Tambahan
+- Semua endpoint menggunakan CORS headers
+- Validasi input di setiap endpoint
+- Error handling yang konsisten
+- Logging untuk debugging (dapat ditambahkan sesuai kebutuhan)
+- Kompatibilitas dengan aplikasi existing tanpa mengorbankan keamanan 
